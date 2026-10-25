@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Navbar, type ActiveTab } from './components/Navbar';
+import { Navbar } from './components/Navbar';
 import { StudentApplicationFlow } from './components/StudentFlow/StudentApplicationFlow';
 import { TrackApplicationView } from './components/Tracking/TrackApplicationView';
-import { CommitteeDashboard } from './components/Committee/CommitteeDashboard';
+import { CommitteeApplicationsListPage } from './components/Committee/CommitteeApplicationsListPage';
+import { CommitteeApplicationDetailPage } from './components/Committee/CommitteeApplicationDetailPage';
 import { CommitteeLoginModal } from './components/Committee/CommitteeLoginModal';
 import { CourseCatalogView } from './components/Catalog/CourseCatalogView';
-import { ShieldAlert, Server, ExternalLink } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,11 +19,38 @@ const queryClient = new QueryClient({
   },
 });
 
-function MainContent() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('student');
-  const [isCommitteeLoggedIn, setIsCommitteeLoggedIn] = useState(false);
+function CommitteeProtectedView({ onLogin }: { onLogin: () => void }) {
+  return (
+    <div className="w-full my-6 bg-white dark:bg-slate-900 p-8 sm:p-12 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm text-center space-y-5 animate-in fade-in duration-200">
+      <div className="w-16 h-16 rounded-2xl bg-brand-50 dark:bg-brand-950/70 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto shadow-sm">
+        <ShieldAlert className="w-8 h-8" />
+      </div>
+      <div>
+        <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
+          Yetkili Girişi Gereklidir
+        </h2>
+        <p className="text-sm sm:text-base text-slate-500 dark:text-slate-400 leading-relaxed max-w-xl mx-auto mt-2">
+          Komisyon yönetim paneline ve intibak kararlarına erişmek için lütfen komisyon üyesi olarak oturum açınız.
+        </p>
+      </div>
+      <div className="pt-2">
+        <button
+          onClick={onLogin}
+          className="bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-8 rounded-xl text-sm sm:text-base transition-colors shadow-sm"
+        >
+          Komisyon Giriş Ekranını Aç
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MainLayout() {
+  const navigate = useNavigate();
+  const [isCommitteeLoggedIn, setIsCommitteeLoggedIn] = useState<boolean>(() => {
+    return localStorage.getItem('committee_auth') === 'true';
+  });
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [trackingCodeToView, setTrackingCodeToView] = useState('');
 
   // Dark Mode State
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -47,22 +76,16 @@ function MainContent() {
     setIsDarkMode((prev) => !prev);
   };
 
-  const handleGoToTracking = (code: string) => {
-    setTrackingCodeToView(code);
-    setActiveTab('tracking');
-  };
-
   const handleCommitteeLoginSuccess = () => {
     setIsCommitteeLoggedIn(true);
-    setActiveTab('committee');
+    localStorage.setItem('committee_auth', 'true');
+    navigate('/komisyon');
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 transition-colors duration-200">
       {/* Navigation Bar */}
       <Navbar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
         isCommitteeLoggedIn={isCommitteeLoggedIn}
         setIsCommitteeLoggedIn={setIsCommitteeLoggedIn}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
@@ -70,43 +93,36 @@ function MainContent() {
         onToggleDarkMode={toggleDarkMode}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {activeTab === 'student' && (
-          <StudentApplicationFlow onGoToTracking={handleGoToTracking} />
-        )}
-
-        {activeTab === 'tracking' && (
-          <TrackApplicationView initialTrackingCode={trackingCodeToView} />
-        )}
-
-        {activeTab === 'courses' && <CourseCatalogView />}
-
-        {activeTab === 'committee' && (
-          isCommitteeLoggedIn ? (
-            <CommitteeDashboard />
-          ) : (
-            <div className="max-w-xl mx-auto my-10 bg-white dark:bg-slate-900 p-8 sm:p-10 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl text-center space-y-5 animate-in fade-in duration-200">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-sm">
-                <ShieldAlert className="w-7 h-7" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
-                Yetkili Girişi Gereklidir
-              </h2>
-              <p className="text-sm sm:text-base text-slate-500 dark:text-slate-400 leading-relaxed max-w-md mx-auto">
-                Komisyon paneline erişmek için lütfen komisyon üyesi olarak oturum açınız.
-              </p>
-              <div className="pt-2">
-                <button
-                  onClick={() => setIsLoginModalOpen(true)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-xl text-sm sm:text-base transition-colors shadow-md shadow-indigo-600/30"
-                >
-                  Komisyon Giriş Ekranını Aç
-                </button>
-              </div>
-            </div>
-          )
-        )}
+      {/* Main Container - Full Width */}
+      <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 2xl:px-12 py-5 lg:py-7 flex flex-col">
+        <Routes>
+          <Route path="/" element={<StudentApplicationFlow />} />
+          <Route path="/basvuru" element={<Navigate to="/" replace />} />
+          <Route path="/sorgula" element={<TrackApplicationView />} />
+          <Route path="/sorgula/:trackingCode" element={<TrackApplicationView />} />
+          <Route path="/katalog" element={<CourseCatalogView />} />
+          <Route
+            path="/komisyon"
+            element={
+              isCommitteeLoggedIn ? (
+                <CommitteeApplicationsListPage />
+              ) : (
+                <CommitteeProtectedView onLogin={() => setIsLoginModalOpen(true)} />
+              )
+            }
+          />
+          <Route
+            path="/komisyon/:trackingCode"
+            element={
+              isCommitteeLoggedIn ? (
+                <CommitteeApplicationDetailPage />
+              ) : (
+                <CommitteeProtectedView onLogin={() => setIsLoginModalOpen(true)} />
+              )
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
 
       {/* Login Modal */}
@@ -115,37 +131,6 @@ function MainContent() {
         onClose={() => setIsLoginModalOpen(false)}
         onSuccess={handleCommitteeLoginSuccess}
       />
-
-      {/* Modern Footer */}
-      <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 mt-auto py-4 text-xs sm:text-sm text-slate-500 dark:text-slate-400 transition-colors duration-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-800 dark:text-slate-200">
-              Erciyes Üniversitesi
-            </span>
-            <span>•</span>
-            <span className="text-slate-600 dark:text-slate-400">
-              Mühendislik Fakültesi Bilgisayar Mühendisliği Bölümü
-            </span>
-          </div>
-
-          <div className="flex items-center gap-5 text-sm">
-            <span className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-bold bg-emerald-50 dark:bg-emerald-950/70 px-4 py-1.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-              <Server className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              Backend: localhost:8081
-            </span>
-            <a
-              href="http://localhost:8081/swagger-ui/index.html"
-              target="_blank"
-              rel="noreferrer"
-              className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 font-bold inline-flex items-center gap-1.5 hover:underline"
-            >
-              <span>Swagger UI</span>
-              <ExternalLink className="w-4 h-4" />
-            </a>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
@@ -153,7 +138,9 @@ function MainContent() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <MainContent />
+      <BrowserRouter>
+        <MainLayout />
+      </BrowserRouter>
     </QueryClientProvider>
   );
 }

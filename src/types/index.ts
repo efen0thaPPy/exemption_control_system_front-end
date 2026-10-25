@@ -42,9 +42,7 @@ export interface TranscriptDto {
 export interface ErciyesCourseResponseDto {
   courseCode: string;
   courseName: string;
-  practiceHours: number;
-  theoryHours: number;
-  semester: number;
+  semesterName?: string;
   courseType: CourseType;
   ects: number;
 }
@@ -52,6 +50,7 @@ export interface ErciyesCourseResponseDto {
 export interface SelectedCourseRequestDto {
   courseCode: string;
   courseName: string;
+  semesterName?: string;
   semester?: string;
   courseLanguage?: CourseLanguage;
   courseType: CourseType;
@@ -71,6 +70,7 @@ export interface ApplicationRequestDto {
   transcriptRequestDto: TranscriptRequestDto;
   courses: SelectedCourseRequestDto[];
   transferType: TransferType;
+  academicYear: string;
 }
 
 export interface ApplicationUserResponseDto {
@@ -85,8 +85,10 @@ export interface Student {
 }
 
 export interface SelectedCourseResponse {
+  id?: number;
   courseCode: string;
   courseName: string;
+  semesterName?: string;
   semester?: string;
   courseLanguage?: CourseLanguage;
   courseType: CourseType;
@@ -102,6 +104,7 @@ export interface ApplicationResponseDto {
   applicationStatus: ApplicationStatus;
   transferType: TransferType;
   selectedCourses: SelectedCourseResponse[];
+  academicYear?: string;
 }
 
 export interface SimpleApplicationResponseDto {
@@ -114,17 +117,10 @@ export interface SimpleApplicationResponseDto {
 }
 
 export interface ExemptionResponseDto {
-  firstName?: string;
-  lastName?: string;
-  university?: string;
   sourceCourseName?: string;
   targetCourseName?: string;
   academicYear?: string;
-  sourceAkts?: number;
-  targetAkts?: number;
-  sourceGrade?: Grade;
   llmReport?: string;
-  sourceSemester?: string;
   missingTopics?: string;
   llmSimilarityPercent?: number;
   vectorSimilarityPercent?: number;

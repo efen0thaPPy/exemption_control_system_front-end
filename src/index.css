@@ -6,8 +6,30 @@
   html {
     font-size: 16px;
   }
+  @media (min-width: 1024px) {
+    html {
+      font-size: 18px;
+    }
+  }
+  @media (min-width: 1400px) {
+    html {
+      font-size: 20px;
+    }
+  }
+  @media (min-width: 1750px) {
+    html {
+      font-size: 23px;
+    }
+  }
+
+  html, body, #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
   body {
-    @apply bg-slate-50 text-slate-900 antialiased min-h-screen font-sans transition-colors duration-200;
+    @apply bg-slate-50 text-slate-900 antialiased font-sans transition-colors duration-200 text-slate-800 dark:text-slate-100;
   }
   html.dark body {
     @apply bg-slate-950 text-slate-100;

@@ -7,6 +7,9 @@ import type {
   CourseContentDto,
   ErciyesCourseResponseDto,
   ExemptionResponseDto,
+  ExemptionStatus,
+  SelectedCourseRequestDto,
+  SelectedCourseResponse,
   SimpleApplicationResponseDto,
   TranscriptDto,
   TransferType,
@@ -14,6 +17,34 @@ import type {
 } from '../types';
 
 export const exemptionApi = {
+  /**
+   * Fetch active / maximum academic year from backend
+   */
+  async getMaxAcademicYear(): Promise<string> {
+    const response = await apiClient.get<string>('/api/erciyes/academic-years');
+    return response.data;
+  },
+
+  /**
+   * Fetch Erciyes courses for a specific academic year
+   */
+  async getCoursesByAcademicYear(academicYear: string): Promise<ErciyesCourseResponseDto[]> {
+    const response = await apiClient.get<ErciyesCourseResponseDto[]>(
+      `/api/erciyes/academic-years/${encodeURIComponent(academicYear.trim())}`
+    );
+    return response.data;
+  },
+
+  /**
+   * Get available Erciyes courses for a given transfer type
+   */
+  async getErciyesCourses(transferType: TransferType): Promise<ErciyesCourseResponseDto[]> {
+    const response = await apiClient.get<ErciyesCourseResponseDto[]>('/api/erciyes/courses', {
+      params: { transferType },
+    });
+    return response.data;
+  },
+
   /**
    * Pre-validate complete student application before final submission
    */
@@ -24,18 +55,13 @@ export const exemptionApi = {
   ): Promise<ValidateResponseDto> {
     const formData = new FormData();
 
-    // Attach applicationRequestDto JSON blob
     const jsonBlob = new Blob([JSON.stringify(dto)], { type: 'application/json' });
     formData.append('applicationRequestDto', jsonBlob);
-
-    // Attach transcript PDF
     formData.append('transcriptFile', transcriptFile);
 
-    // Attach each course syllabus PDF
     for (const [courseCode, file] of Object.entries(courseFiles)) {
       if (file) {
         formData.append(courseCode, file);
-        formData.append(`courseFiles[${courseCode}]`, file);
       }
     }
 
@@ -52,31 +78,6 @@ export const exemptionApi = {
   },
 
   /**
-   * Upload transcript PDF and extract student info + courses using AI
-   */
-  async parseTranscript(file: File): Promise<TranscriptDto> {
-    const formData = new FormData();
-    formData.append('transcript', file);
-
-    const response = await apiClient.post<TranscriptDto>('/api/ai/transcript', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
-  },
-
-  /**
-   * Get available Erciyes courses for a given transfer type
-   */
-  async getErciyesCourses(transferType: TransferType): Promise<ErciyesCourseResponseDto[]> {
-    const response = await apiClient.get<ErciyesCourseResponseDto[]>('/api/erciyes/courses', {
-      params: { transferType },
-    });
-    return response.data;
-  },
-
-  /**
    * Submit complete student application with transcript and course syllabus PDFs
    */
   async submitApplication(
@@ -86,19 +87,13 @@ export const exemptionApi = {
   ): Promise<ApplicationUserResponseDto> {
     const formData = new FormData();
 
-    // Attach applicationRequestDto JSON blob
     const jsonBlob = new Blob([JSON.stringify(dto)], { type: 'application/json' });
     formData.append('applicationRequestDto', jsonBlob);
-
-    // Attach transcript PDF
     formData.append('transcriptFile', transcriptFile);
 
-    // Attach each course syllabus PDF
-    // We attach both direct courseCode and indexed key so Spring resolves whichever way it is mapped
     for (const [courseCode, file] of Object.entries(courseFiles)) {
       if (file) {
         formData.append(courseCode, file);
-        formData.append(`courseFiles[${courseCode}]`, file);
       }
     }
 
@@ -139,17 +134,87 @@ export const exemptionApi = {
   },
 
   /**
-   * Returns the direct URL for viewing/downloading the transcript PDF
+   * Manage / update overall application status (e.g. PENDING -> CONCLUDED)
    */
-  getTranscriptPdfUrl(trackingCode: string): string {
-    return `${API_BASE_URL}/api/applications/${encodeURIComponent(trackingCode)}/pdfs/transcripts`;
+  async updateApplicationStatus(
+    trackingCode: string,
+    applicationStatus: ApplicationStatus
+  ): Promise<ApplicationResponseDto> {
+    const response = await apiClient.put<ApplicationResponseDto>(
+      `/api/applications/${encodeURIComponent(trackingCode.trim())}`,
+      null,
+      {
+        params: { applicationStatus },
+      }
+    );
+    return response.data;
   },
 
   /**
-   * Returns the direct URL for viewing/downloading a specific course syllabus PDF
+   * Manage / update specific selected course status or target course
    */
-  getCourseContentPdfUrl(trackingCode: string, courseCode: string): string {
-    return `${API_BASE_URL}/api/applications/${encodeURIComponent(trackingCode)}/pdfs/coursecontents/${encodeURIComponent(courseCode)}`;
+  async updateCourseStatus(
+    trackingCode: string,
+    courseId: number,
+    params?: {
+      newTargetCourseCode?: string;
+      newCourseCode?: string;
+      exemptionStatus?: ExemptionStatus;
+    }
+  ): Promise<SelectedCourseResponse> {
+    const queryParams: Record<string, string | undefined> = {};
+    const targetCode = params?.newTargetCourseCode || params?.newCourseCode;
+    if (targetCode) {
+      queryParams.newTargetCourseCode = targetCode;
+    }
+    if (params?.exemptionStatus) {
+      queryParams.exemptionStatus = params.exemptionStatus;
+    }
+
+    const response = await apiClient.put<SelectedCourseResponse>(
+      `/api/applications/${encodeURIComponent(trackingCode.trim())}/courses/${courseId}`,
+      null,
+      {
+        params: queryParams,
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete a selected course from an application
+   */
+  async deleteCourse(trackingCode: string, courseId: number): Promise<void> {
+    await apiClient.delete(
+      `/api/applications/${encodeURIComponent(trackingCode.trim())}/courses/${courseId}`
+    );
+  },
+
+  /**
+   * Add a new course to an existing application with syllabus PDF
+   * POST /api/applications/{trackingCode}/courses
+   */
+  async addCourse(
+    trackingCode: string,
+    courseDto: SelectedCourseRequestDto,
+    multipartFile: File
+  ): Promise<SelectedCourseResponse> {
+    const formData = new FormData();
+    const jsonBlob = new Blob([JSON.stringify(courseDto)], { type: 'application/json' });
+    formData.append('selectedCourseRequestDto', jsonBlob);
+    formData.append('multipartFile', multipartFile);
+    formData.append('trackingCode', trackingCode.trim());
+
+    const response = await apiClient.post<SelectedCourseResponse>(
+      `/api/applications/${encodeURIComponent(trackingCode.trim())}/courses?trackingCode=${encodeURIComponent(trackingCode.trim())}`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data;
   },
 
   /**
@@ -157,7 +222,7 @@ export const exemptionApi = {
    */
   async evaluateExemption(
     trackingCode: string,
-    courseCode: string
+    courseId: number
   ): Promise<ExemptionResponseDto[]> {
     const response = await apiClient.post<ExemptionResponseDto[] | ExemptionResponseDto>(
       '/api/exemptions/exemption',
@@ -165,7 +230,7 @@ export const exemptionApi = {
       {
         params: {
           trackingCode: trackingCode.trim(),
-          courseCode: courseCode.trim(),
+          courseId,
         },
       }
     );
@@ -176,13 +241,30 @@ export const exemptionApi = {
   },
 
   /**
-   * Raw PDF text extraction
+   * Returns direct URL for viewing/downloading the transcript PDF
    */
-  async extractPdfText(file: File): Promise<string> {
+  getTranscriptPdfUrl(trackingCode: string): string {
+    return `${API_BASE_URL}/api/applications/${encodeURIComponent(trackingCode)}/pdfs/transcripts`;
+  },
+
+  /**
+   * Returns direct URL for viewing/downloading a specific course syllabus PDF
+   */
+  getCourseContentPdfUrl(trackingCode: string, courseId: number | string): string {
+    return `${API_BASE_URL}/api/applications/${encodeURIComponent(trackingCode)}/pdfs/coursecontents/${encodeURIComponent(courseId)}`;
+  },
+
+  /**
+   * Upload transcript PDF and extract student info + courses using AI
+   */
+  async parseTranscript(file: File): Promise<TranscriptDto> {
     const formData = new FormData();
-    formData.append('file', file);
-    const response = await apiClient.post<string>('/api/pdfs/extract-text', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    formData.append('transcript', file);
+
+    const response = await apiClient.post<TranscriptDto>('/api/ai/transcript', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
     });
     return response.data;
   },
@@ -194,6 +276,18 @@ export const exemptionApi = {
     const formData = new FormData();
     formData.append('courseContent', file);
     const response = await apiClient.post<CourseContentDto>('/api/ai/coursecontent', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  /**
+   * Raw PDF text extraction
+   */
+  async extractPdfText(file: File): Promise<string> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await apiClient.post<string>('/api/pdfs/extract-text', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
