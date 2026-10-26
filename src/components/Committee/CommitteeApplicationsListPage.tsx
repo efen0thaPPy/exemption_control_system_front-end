@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { 
@@ -16,9 +16,27 @@ import type { ApplicationStatus } from '../../types';
 
 export const CommitteeApplicationsListPage: React.FC = () => {
   const navigate = useNavigate();
-  const [statusFilter, setStatusFilter] = useState<ApplicationStatus | 'ALL'>('ALL');
-  const [transferFilter, setTransferFilter] = useState<'ALL' | 'LATERAL_TRANSFER' | 'VERTICAL_TRANSFER'>('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<ApplicationStatus | 'ALL'>(() => {
+    return (sessionStorage.getItem('comm_list_status') as ApplicationStatus | 'ALL') || 'ALL';
+  });
+  const [transferFilter, setTransferFilter] = useState<'ALL' | 'LATERAL_TRANSFER' | 'VERTICAL_TRANSFER'>(() => {
+    return (sessionStorage.getItem('comm_list_transfer') as 'ALL' | 'LATERAL_TRANSFER' | 'VERTICAL_TRANSFER') || 'ALL';
+  });
+  const [searchQuery, setSearchQuery] = useState(() => {
+    return sessionStorage.getItem('comm_list_search') || '';
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem('comm_list_status', statusFilter);
+  }, [statusFilter]);
+
+  useEffect(() => {
+    sessionStorage.setItem('comm_list_transfer', transferFilter);
+  }, [transferFilter]);
+
+  useEffect(() => {
+    sessionStorage.setItem('comm_list_search', searchQuery);
+  }, [searchQuery]);
 
   const {
     data: applications = [],

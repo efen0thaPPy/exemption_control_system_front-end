@@ -8,6 +8,7 @@ import { CommitteeApplicationsListPage } from './components/Committee/CommitteeA
 import { CommitteeApplicationDetailPage } from './components/Committee/CommitteeApplicationDetailPage';
 import { CommitteeLoginModal } from './components/Committee/CommitteeLoginModal';
 import { CourseCatalogView } from './components/Catalog/CourseCatalogView';
+import { StudentFlowProvider } from './context/StudentFlowContext';
 import { ShieldAlert } from 'lucide-react';
 
 const queryClient = new QueryClient({
@@ -139,7 +140,9 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <MainLayout />
+        <StudentFlowProvider>
+          <MainLayout />
+        </StudentFlowProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );

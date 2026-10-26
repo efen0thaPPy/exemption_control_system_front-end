@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   FileText, 
@@ -25,8 +25,15 @@ export const TrackApplicationView: React.FC<TrackApplicationViewProps> = ({
   const { trackingCode: paramCode } = useParams<{ trackingCode?: string }>();
   const navigate = useNavigate();
 
-  const activeTrackingCode = paramCode || initialTrackingCode || '';
+  const savedTrackingCode = sessionStorage.getItem('last_tracking_code') || '';
+  const activeTrackingCode = paramCode || initialTrackingCode || savedTrackingCode || '';
   const [searchInput, setSearchInput] = useState(activeTrackingCode);
+
+  useEffect(() => {
+    if (activeTrackingCode) {
+      sessionStorage.setItem('last_tracking_code', activeTrackingCode);
+    }
+  }, [activeTrackingCode]);
 
   const {
     data: application,

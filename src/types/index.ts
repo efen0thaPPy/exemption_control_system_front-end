@@ -50,12 +50,12 @@ export interface ErciyesCourseResponseDto {
 export interface SelectedCourseRequestDto {
   courseCode: string;
   courseName: string;
+  semester: string;
   semesterName?: string;
-  semester?: string;
   courseLanguage?: CourseLanguage;
   courseType: CourseType;
   ects: number;
-  grade?: Grade;
+  grade: Grade;
   targetCourseCode: string;
   exemptionStatus?: ExemptionStatus;
 }
@@ -117,7 +117,9 @@ export interface SimpleApplicationResponseDto {
 }
 
 export interface ExemptionResponseDto {
+  sourceCourseCode?: string;
   sourceCourseName?: string;
+  targetCourseCode?: string;
   targetCourseName?: string;
   academicYear?: string;
   llmReport?: string;

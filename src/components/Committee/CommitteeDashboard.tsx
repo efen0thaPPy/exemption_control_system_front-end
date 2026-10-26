@@ -21,7 +21,8 @@ import {
   UploadCloud,
   GraduationCap,
   Building2,
-  ArrowRight
+  ArrowRight,
+  Sparkles
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -54,6 +55,8 @@ export const CommitteeDashboard: React.FC = () => {
   const [isEvaluationMinimized, setIsEvaluationMinimized] = useState(false);
   const [evaluationResults, setEvaluationResults] = useState<ExemptionResponseDto[] | null>(null);
   const [evaluationError, setEvaluationError] = useState<string | null>(null);
+  const [dashboardCandidateFilter, setDashboardCandidateFilter] = useState<number | 'ALL'>('ALL');
+  const [isForcingModel, setIsForcingModel] = useState<boolean>(false);
 
   // Add Course Modal State
   const [isAddCourseModalOpen, setIsAddCourseModalOpen] = useState(false);
@@ -108,15 +111,29 @@ export const CommitteeDashboard: React.FC = () => {
 
   // 3. Exemption Evaluation Mutation (Similarity analysis of syllabus)
   const exemptionMutation = useMutation({
-    mutationFn: ({ trackingCode, courseId }: { trackingCode: string; courseId: number }) =>
-      exemptionApi.evaluateExemption(trackingCode, courseId),
-    onSuccess: (data) => {
+    mutationFn: ({
+      trackingCode,
+      courseId,
+      forceReevaluate,
+    }: {
+      trackingCode: string;
+      courseId: number;
+      forceReevaluate?: boolean;
+    }) => {
+      setIsForcingModel(!!forceReevaluate);
+      return exemptionApi.evaluateExemption(trackingCode, courseId, forceReevaluate);
+    },
+    onSuccess: (data, vars) => {
       setEvaluationResults(data);
-      showFeedback('Ders içerik ve benzerlik analizi tamamlandı.');
+      setDashboardCandidateFilter('ALL');
+      showFeedback(vars.forceReevaluate ? 'Ders benzerlik analizi model çalıştırılarak sıfırdan yapıldı.' : 'Ders muafiyet raporu açıldı.');
     },
     onError: (err: Error) => {
       setEvaluationError(err.message || 'Ders analiz edilirken bir hata oluştu.');
       showFeedback(err.message || 'Ders analiz edilemedi.', 'error');
+    },
+    onSettled: () => {
+      setIsForcingModel(false);
     },
   });
 
@@ -257,9 +274,10 @@ export const CommitteeDashboard: React.FC = () => {
     });
   };
 
-  const handleStartEvaluation = (course: SelectedCourseResponse, index: number) => {
+  const handleStartEvaluation = (course: SelectedCourseResponse, index: number, forceReevaluate = false) => {
     if (!activeTrackingCode) return;
     setEvaluatingCourse(course);
+    setIsForcingModel(forceReevaluate);
     setIsEvaluationMinimized(false);
     setEvaluationResults(null);
     setEvaluationError(null);
@@ -267,6 +285,7 @@ export const CommitteeDashboard: React.FC = () => {
     exemptionMutation.mutate({
       trackingCode: activeTrackingCode,
       courseId,
+      forceReevaluate,
     });
   };
 
@@ -685,14 +704,44 @@ export const CommitteeDashboard: React.FC = () => {
                                   <span>İçerik PDF</span>
                                 </a>
 
-                                {/* Similarity Analysis Evaluation */}
+                                {/* Striking Primary: Benzerlik Raporu */}
                                 <button
-                                  onClick={() => handleStartEvaluation(c, idx)}
-                                  className="text-sm font-bold bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm transition-all"
-                                  title="Müfredat içeriklerini karşılaştır ve benzerlik analizi yap"
+                                  onClick={() => handleStartEvaluation(c, idx, false)}
+                                  disabled={exemptionMutation.isPending && evaluatingCourse?.id === courseId}
+                                  className="text-xs sm:text-sm font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-md shadow-indigo-500/25 hover:shadow-lg hover:shadow-indigo-500/35 border border-indigo-400/30 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
+                                  title="Veritabanındaki mevcut benzerlik raporunu görüntüler (yoksa modeli çalıştırır)"
                                 >
-                                  <BarChart3 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                                  <span>Benzerlik Analizi</span>
+                                  {exemptionMutation.isPending && evaluatingCourse?.id === courseId && !isForcingModel ? (
+                                    <>
+                                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                      <span>Yükleniyor...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <BarChart3 className="w-4 h-4 text-white" />
+                                      <span>Benzerlik Raporu</span>
+                                    </>
+                                  )}
+                                </button>
+
+                                {/* Subtle Secondary: Yine de Modeli Çalıştır */}
+                                <button
+                                  onClick={() => handleStartEvaluation(c, idx, true)}
+                                  disabled={exemptionMutation.isPending && evaluatingCourse?.id === courseId}
+                                  className="text-xs font-semibold px-2.5 py-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50/70 dark:hover:bg-purple-950/40 border border-slate-200 dark:border-slate-800 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                                  title="Nadir durumlarda: Veritabanındaki rapordan bağımsız olarak yapay zeka modelini sıfırdan tekrar çalıştırır"
+                                >
+                                  {exemptionMutation.isPending && evaluatingCourse?.id === courseId && isForcingModel ? (
+                                    <>
+                                      <div className="w-3.5 h-3.5 border-2 border-purple-500/30 border-t-purple-600 rounded-full animate-spin" />
+                                      <span>Model Çalışıyor...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Sparkles className="w-3.5 h-3.5 text-slate-400" />
+                                      <span>Yine de Modeli Çalıştır</span>
+                                    </>
+                                  )}
                                 </button>
 
                                 {/* Delete Course Button */}
@@ -1119,6 +1168,33 @@ export const CommitteeDashboard: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Re-run Model Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeTrackingCode && evaluatingCourse) {
+                      const courseId = evaluatingCourse.id ?? 1;
+                      exemptionMutation.mutate({
+                        trackingCode: activeTrackingCode,
+                        courseId,
+                        forceReevaluate: true,
+                      });
+                    }
+                  }}
+                  disabled={exemptionMutation.isPending}
+                  className="text-slate-600 dark:text-slate-400 hover:text-purple-700 dark:hover:text-purple-300 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-purple-50 dark:hover:bg-purple-950/50 transition-colors flex items-center gap-1.5 text-xs sm:text-sm font-semibold border border-slate-200 dark:border-slate-700 shadow-2xs disabled:opacity-50"
+                  title="Veritabanındaki rapordan bağımsız olarak yapay zeka modelini sıfırdan tekrar çalıştırır"
+                >
+                  <Sparkles
+                    className={`w-3.5 h-3.5 text-slate-400 ${
+                      exemptionMutation.isPending && isForcingModel ? 'animate-spin text-purple-600' : ''
+                    }`}
+                  />
+                  <span className="hidden sm:inline">
+                    {exemptionMutation.isPending && isForcingModel ? 'Model Çalışıyor...' : 'Yine de Modeli Çalıştır'}
+                  </span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setIsEvaluationMinimized(true)}
@@ -1169,115 +1245,188 @@ export const CommitteeDashboard: React.FC = () => {
               </div>
             )}
 
-            {/* Results State */}
+            {/* Results State - Separated by Row */}
             {evaluationResults && evaluationResults.length > 0 && (
               <div className="space-y-6">
-                {evaluationResults.map((res, idx) => (
-                  <div key={idx} className="space-y-5">
-                    {/* Similarity Metrics Gauges */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {res.llmSimilarityPercent !== undefined && (
-                        <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50/50 dark:from-indigo-950/70 dark:to-blue-950/50 border border-indigo-100 dark:border-indigo-800">
-                          <p className="text-sm font-bold text-indigo-700 dark:text-indigo-300">
-                            İçerik Semantik Benzerliği
-                          </p>
-                          <div className="flex items-baseline gap-2 mt-2">
-                            <span className="text-4xl font-black text-indigo-900 dark:text-indigo-200">
-                              %{res.llmSimilarityPercent?.toFixed(1)}
-                            </span>
-                            <span className="text-sm text-slate-500 dark:text-slate-400">
-                              (Semantik Analiz)
-                            </span>
-                          </div>
-                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-3 overflow-hidden">
-                            <div
-                              className="bg-indigo-600 h-2.5 rounded-full transition-all duration-500"
-                              style={{ width: `${Math.min(100, res.llmSimilarityPercent || 0)}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {res.vectorSimilarityPercent !== undefined && (
-                        <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50/50 dark:from-emerald-950/70 dark:to-teal-950/50 border border-emerald-100 dark:border-emerald-800">
-                          <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">
-                            Vektör Cosine Benzerliği
-                          </p>
-                          <div className="flex items-baseline gap-2 mt-2">
-                            <span className="text-4xl font-black text-emerald-900 dark:text-emerald-200">
-                              %{res.vectorSimilarityPercent?.toFixed(1)}
-                            </span>
-                            <span className="text-sm text-slate-500 dark:text-slate-400">
-                              (Embedding Vektörü)
-                            </span>
-                          </div>
-                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-3 overflow-hidden">
-                            <div
-                              className="bg-emerald-600 h-2.5 rounded-full transition-all duration-500"
-                              style={{ width: `${Math.min(100, res.vectorSimilarityPercent || 0)}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Comparison Details */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                      <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700">
-                        <span className="text-slate-400 block text-sm font-semibold uppercase">Kaynak Ders</span>
-                        <span className="font-extrabold text-slate-900 dark:text-white text-base mt-1 block truncate">
-                          {res.sourceCourseName || evaluatingCourse.courseName}
-                        </span>
-                        <span className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 block">
-                          {evaluatingCourse.courseCode} • {evaluatingCourse.ects} AKTS {evaluatingCourse.grade ? `• Not: ${evaluatingCourse.grade}` : ''}
-                        </span>
-                      </div>
-                      <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700">
-                        <span className="text-slate-400 block text-sm font-semibold uppercase">Hedef Erciyes Dersi</span>
-                        <span className="font-extrabold text-slate-900 dark:text-white text-base mt-1 block truncate">
-                          {res.targetCourseName || evaluatingCourse.targetCourseCode}
-                        </span>
-                        <span className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 block">
-                          Kod: {evaluatingCourse.targetCourseCode}
-                        </span>
-                      </div>
-                      <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700">
-                        <span className="text-slate-400 block text-sm font-semibold uppercase">Akademik Yıl</span>
-                        <span className="font-extrabold text-slate-900 dark:text-white text-base mt-1 block">
-                          {res.academicYear || activeApp?.academicYear || '—'}
-                        </span>
-                        <span className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 block">
-                          İntibak Dönemi
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Missing Topics Callout */}
-                    {res.missingTopics && (
-                      <div className="p-5 rounded-2xl bg-amber-50/80 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 space-y-2">
-                        <div className="flex items-center gap-2.5 text-amber-900 dark:text-amber-200 font-bold text-sm sm:text-base">
-                          <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                          <span>Eksik / Kapsanmayan Konular</span>
-                        </div>
-                        <p className="text-sm text-amber-950 dark:text-amber-200 leading-relaxed pl-7">
-                          {res.missingTopics}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Full Syllabus Report */}
-                    {res.llmReport && (
-                      <div className="space-y-2">
-                        <h4 className="font-bold text-slate-900 dark:text-white text-base">
-                          İçerik Analiz Raporu
-                        </h4>
-                        <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-800 dark:text-slate-200 leading-relaxed max-h-72 overflow-y-auto whitespace-pre-line font-mono">
-                          {res.llmReport}
-                        </div>
-                      </div>
-                    )}
+                {/* Candidate Selector Tabs (if multiple candidates) */}
+                {evaluationResults.length > 1 && (
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                    <button
+                      onClick={() => setDashboardCandidateFilter('ALL')}
+                      className={`text-xs sm:text-sm font-bold px-4 py-2 rounded-xl transition-all whitespace-nowrap ${
+                        dashboardCandidateFilter === 'ALL'
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Tüm Adaylar ({evaluationResults.length})
+                    </button>
+                    {evaluationResults.map((r, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setDashboardCandidateFilter(i)}
+                        className={`text-xs sm:text-sm font-bold px-4 py-2 rounded-xl transition-all flex items-center gap-2 whitespace-nowrap ${
+                          dashboardCandidateFilter === i
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        <span>{i + 1}. Aday: {r.targetCourseCode || 'Hedef'}</span>
+                        <span className="font-mono text-xs opacity-90">%{r.llmSimilarityPercent?.toFixed(0)}</span>
+                      </button>
+                    ))}
                   </div>
-                ))}
+                )}
+
+                {/* Reports Rendered Row by Row */}
+                {evaluationResults
+                  .map((res, originalIndex) => ({ res, originalIndex }))
+                  .filter(({ originalIndex }) => dashboardCandidateFilter === 'ALL' || dashboardCandidateFilter === originalIndex)
+                  .map(({ res, originalIndex }) => {
+                    const isAlreadyTarget =
+                      Boolean(res.targetCourseCode && evaluatingCourse.targetCourseCode === res.targetCourseCode);
+
+                    return (
+                      <div
+                        key={originalIndex}
+                        className="rounded-3xl border-2 border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-850 p-5 sm:p-6 space-y-5 shadow-xs transition-colors"
+                      >
+                        {/* Row Header Bar */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-slate-200/80 dark:border-slate-800">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <span className="text-xs font-black uppercase tracking-wider bg-indigo-600 text-white px-3 py-1 rounded-xl shadow-xs">
+                              {evaluationResults.length > 1 ? `${originalIndex + 1}. Aday Eşleşme` : 'Hedef Ders Eşleşmesi'}
+                            </span>
+                            <span className="font-mono text-base font-extrabold text-slate-900 dark:text-white bg-white dark:bg-slate-900 px-3 py-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+                              {res.targetCourseCode || evaluatingCourse.targetCourseCode || '—'}
+                            </span>
+                            <span className="font-bold text-slate-900 dark:text-white text-base sm:text-lg">
+                              {res.targetCourseName || evaluatingCourse.targetCourseCode}
+                            </span>
+                          </div>
+
+                          {/* Quick Action: Assign as Target Course */}
+                          <div className="flex items-center gap-2">
+                            {res.targetCourseCode && !isAlreadyTarget ? (
+                              <button
+                                onClick={() => {
+                                  const courseId = evaluatingCourse.id ?? 1;
+                                  updateCourseMutation.mutate({
+                                    trackingCode: activeTrackingCode,
+                                    courseId,
+                                    newCourseCode: res.targetCourseCode,
+                                  });
+                                  setEvaluatingCourse((prev) =>
+                                    prev ? { ...prev, targetCourseCode: res.targetCourseCode! } : null
+                                  );
+                                  showFeedback(`Hedef ders ${res.targetCourseCode} olarak atandı.`);
+                                }}
+                                className="text-xs sm:text-sm font-bold bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 px-3.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shadow-2xs"
+                                title="Bu adayı öğrencinin hedef Erciyes karşılığı olarak seç"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Bu Dersi Hedef Olarak Ata</span>
+                              </button>
+                            ) : (
+                              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-200 dark:border-emerald-800 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Mevcut Hedef Ders</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Row Content: 3-column horizontal row layout */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+                          {/* 1. Scores Column (lg:col-span-4) */}
+                          <div className="lg:col-span-4 flex flex-col justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800">
+                            <div className="space-y-3">
+                              {/* LLM Semantic Score */}
+                              <div className="p-3.5 rounded-xl bg-gradient-to-br from-indigo-50/80 to-blue-50/40 dark:from-indigo-950/60 dark:to-blue-950/40 border border-indigo-100 dark:border-indigo-800/70">
+                                <div className="flex items-center justify-between text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                                  <span>İçerik Semantik Benzerliği</span>
+                                  <span className="text-2xl font-black text-indigo-900 dark:text-indigo-200">
+                                    %{res.llmSimilarityPercent?.toFixed(1) || '0.0'}
+                                  </span>
+                                </div>
+                                <div className="w-full bg-indigo-200/50 dark:bg-slate-800 rounded-full h-2 mt-2 overflow-hidden">
+                                  <div
+                                    className="bg-indigo-600 h-2 rounded-full transition-all duration-500"
+                                    style={{ width: `${Math.min(100, res.llmSimilarityPercent || 0)}%` }}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Vector Cosine Score */}
+                              <div className="p-3.5 rounded-xl bg-gradient-to-br from-teal-50/80 to-emerald-50/40 dark:from-teal-950/60 dark:to-emerald-950/40 border border-teal-100 dark:border-teal-800/70">
+                                <div className="flex items-center justify-between text-xs font-bold text-teal-800 dark:text-teal-300">
+                                  <span>Vektörel Benzerlik</span>
+                                  <span className="text-2xl font-black text-teal-900 dark:text-teal-200">
+                                    %{res.vectorSimilarityPercent?.toFixed(1) || '0.0'}
+                                  </span>
+                                </div>
+                                <div className="w-full bg-teal-200/50 dark:bg-slate-800 rounded-full h-2 mt-2 overflow-hidden">
+                                  <div
+                                    className="bg-teal-600 h-2 rounded-full transition-all duration-500"
+                                    style={{ width: `${Math.min(100, res.vectorSimilarityPercent || 0)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Match Evaluation Pill */}
+                            <div
+                              className={`p-2.5 rounded-xl text-xs font-bold flex items-center justify-center text-center ${
+                                (res.llmSimilarityPercent || 0) >= 70
+                                  ? 'bg-emerald-100/90 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                  : (res.llmSimilarityPercent || 0) >= 50
+                                  ? 'bg-amber-100/90 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                                  : 'bg-rose-100/90 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                              }`}
+                            >
+                              {(res.llmSimilarityPercent || 0) >= 70
+                                ? '✓ Yüksek Uyum (Muafiyet Tavsiye Edilir)'
+                                : (res.llmSimilarityPercent || 0) >= 50
+                                ? '⚠ Kısmi Uyum (Komisyon İncelemesi Gerekli)'
+                                : '✗ Düşük Uyum (Muafiyet Önerilmez)'}
+                            </div>
+                          </div>
+
+                          {/* 2. Eksik Konular Column (lg:col-span-4) */}
+                          <div className="lg:col-span-4 p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/70 flex flex-col justify-between">
+                            <div>
+                              <span className="font-extrabold text-amber-900 dark:text-amber-300 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                                <span>Eksik Konular & Kazanımlar</span>
+                              </span>
+                              <div className="text-xs sm:text-sm text-amber-950 dark:text-amber-200 leading-relaxed max-h-56 overflow-y-auto pr-1 whitespace-pre-line">
+                                {res.missingTopics || 'Hedef ders ile kaynak ders arasında belirgin bir konu eksiği bulunamadı.'}
+                              </div>
+                            </div>
+                            <div className="text-[11px] text-amber-700/80 dark:text-amber-400/70 pt-2 border-t border-amber-200/60 dark:border-amber-900/50 mt-2">
+                              Müfredat kazanım farkı özeti
+                            </div>
+                          </div>
+
+                          {/* 3. Detailed Report Column (lg:col-span-4) */}
+                          <div className="lg:col-span-4 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex flex-col justify-between">
+                            <div>
+                              <span className="font-extrabold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                                <FileText className="w-4 h-4 text-slate-500" />
+                                <span>Ayrıntılı Değerlendirme Raporu</span>
+                              </span>
+                              <div className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed max-h-56 overflow-y-auto pr-1 whitespace-pre-line font-sans">
+                                {res.llmReport || 'Ayrıntılı rapor verisi bulunamadı.'}
+                              </div>
+                            </div>
+                            <div className="text-[11px] text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-800 mt-2">
+                              Llama 3.1 LLM karşılaştırma çıktısı
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             )}
 

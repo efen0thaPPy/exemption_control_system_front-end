@@ -8,17 +8,17 @@
   }
   @media (min-width: 1024px) {
     html {
-      font-size: 18px;
+      font-size: 20px;
     }
   }
   @media (min-width: 1400px) {
     html {
-      font-size: 20px;
+      font-size: 24px;
     }
   }
   @media (min-width: 1750px) {
     html {
-      font-size: 23px;
+      font-size: 27px;
     }
   }
 

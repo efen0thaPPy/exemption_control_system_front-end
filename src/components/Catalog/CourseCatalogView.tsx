@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BookOpen, 
   Search, 
@@ -12,11 +12,35 @@ import type { CourseType, TransferType } from '../../types';
 
 export const CourseCatalogView: React.FC = () => {
   const queryClient = useQueryClient();
-  const [transferType, setTransferType] = useState<TransferType>('LATERAL_TRANSFER');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [semesterFilter, setSemesterFilter] = useState<string>('ALL');
-  const [typeFilter, setTypeFilter] = useState<string>('ALL');
+  const [transferType, setTransferType] = useState<TransferType>(() => {
+    return (sessionStorage.getItem('catalog_transfer_type') as TransferType) || 'LATERAL_TRANSFER';
+  });
+  const [searchQuery, setSearchQuery] = useState(() => {
+    return sessionStorage.getItem('catalog_search_query') || '';
+  });
+  const [semesterFilter, setSemesterFilter] = useState<string>(() => {
+    return sessionStorage.getItem('catalog_semester_filter') || 'ALL';
+  });
+  const [typeFilter, setTypeFilter] = useState<string>(() => {
+    return sessionStorage.getItem('catalog_type_filter') || 'ALL';
+  });
   const [seedSuccessMsg, setSeedSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    sessionStorage.setItem('catalog_transfer_type', transferType);
+  }, [transferType]);
+
+  useEffect(() => {
+    sessionStorage.setItem('catalog_search_query', searchQuery);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    sessionStorage.setItem('catalog_semester_filter', semesterFilter);
+  }, [semesterFilter]);
+
+  useEffect(() => {
+    sessionStorage.setItem('catalog_type_filter', typeFilter);
+  }, [typeFilter]);
 
   const {
     data: courses = [],

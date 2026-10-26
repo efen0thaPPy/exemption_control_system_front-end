@@ -69,11 +69,11 @@ export const Step2CourseSelection: React.FC<Step2Props> = ({
       nextMap.set(course.courseCode, {
         courseCode: course.courseCode,
         courseName: course.courseName,
-        semester: course.semester,
+        semester: course.semester || '1',
         courseLanguage: course.courseLanguage || 'TURKISH',
         courseType: 'MANDATORY',
         ects: course.ects,
-        grade: course.grade,
+        grade: course.grade || 'AA',
         targetCourseCode: '',
         exemptionStatus: 'PENDING',
       });
@@ -150,11 +150,11 @@ export const Step2CourseSelection: React.FC<Step2Props> = ({
                 nextMap.set(c.courseCode, {
                   courseCode: c.courseCode,
                   courseName: c.courseName,
-                  semester: c.semester,
+                  semester: c.semester || '1',
                   courseLanguage: c.courseLanguage || 'TURKISH',
                   courseType: 'MANDATORY',
                   ects: c.ects,
-                  grade: c.grade,
+                  grade: c.grade || 'AA',
                   targetCourseCode: '',
                   exemptionStatus: 'PENDING',
                 });

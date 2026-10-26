@@ -203,10 +203,9 @@ export const exemptionApi = {
     const jsonBlob = new Blob([JSON.stringify(courseDto)], { type: 'application/json' });
     formData.append('selectedCourseRequestDto', jsonBlob);
     formData.append('multipartFile', multipartFile);
-    formData.append('trackingCode', trackingCode.trim());
 
     const response = await apiClient.post<SelectedCourseResponse>(
-      `/api/applications/${encodeURIComponent(trackingCode.trim())}/courses?trackingCode=${encodeURIComponent(trackingCode.trim())}`,
+      `/api/applications/${encodeURIComponent(trackingCode.trim())}/courses`,
       formData,
       {
         headers: {
@@ -218,9 +217,31 @@ export const exemptionApi = {
   },
 
   /**
-   * Call LLM-based exemption evaluation for a specific course in an application
+  /**
+   * Get previously generated LLM exemption reports for a specific course
+   * GET /api/exemptions/exemption
    */
-  async evaluateExemption(
+  async getExemptionReports(
+    trackingCode: string,
+    courseId: number
+  ): Promise<ExemptionResponseDto[]> {
+    const response = await apiClient.get<ExemptionResponseDto[]>(
+      '/api/exemptions/exemption',
+      {
+        params: {
+          trackingCode: trackingCode.trim(),
+          courseId,
+        },
+      }
+    );
+    return Array.isArray(response.data) ? response.data : [];
+  },
+
+  /**
+   * Run LLM-based exemption evaluation / re-evaluation (calls exemptCourse on backend)
+   * POST /api/exemptions/exemption
+   */
+  async runExemptionEvaluation(
     trackingCode: string,
     courseId: number
   ): Promise<ExemptionResponseDto[]> {
@@ -237,7 +258,28 @@ export const exemptionApi = {
     if (Array.isArray(response.data)) {
       return response.data;
     }
-    return [response.data];
+    return response.data ? [response.data] : [];
+  },
+
+  /**
+   * Get existing exemption reports, or run evaluation if none exist yet
+   */
+  async evaluateExemption(
+    trackingCode: string,
+    courseId: number,
+    forceReevaluate = false
+  ): Promise<ExemptionResponseDto[]> {
+    if (!forceReevaluate) {
+      try {
+        const existing = await this.getExemptionReports(trackingCode, courseId);
+        if (existing && existing.length > 0) {
+          return existing;
+        }
+      } catch (err) {
+        console.warn('Could not fetch existing reports, falling back to evaluation', err);
+      }
+    }
+    return this.runExemptionEvaluation(trackingCode, courseId);
   },
 
   /**
